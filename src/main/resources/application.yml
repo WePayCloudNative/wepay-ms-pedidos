@@ -18,5 +18,12 @@ spring:
   rabbitmq:
     host: ${RABBIT_HOST:localhost}
     port: 5672
-    username: ${RABBIT_USER:admin}
-    password: ${RABBIT_PASS:admin}
+    username: guest
+    password: guest
+    virtual-host: /
+    template:
+      retry:
+        enabled: true
+        initial-interval: 1000
+        max-interval: 30000
+        multiplier: 2.0

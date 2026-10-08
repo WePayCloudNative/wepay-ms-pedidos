@@ -82,8 +82,8 @@ public class PedidoService {
             mensajeEmail.put("subject", "Actualización de Pedido #" + actualizado.getId());
             mensajeEmail.put("body", "Tu pedido ha cambiado al estado: " + nuevoEstado.name());
 
-            // Enviamos al exchange "cmd.direct" con el routing key "email.send"
-            rabbitTemplate.convertAndSend("cmd.direct", "email.send", mensajeEmail);
+            // Enviamos a la cola "q.cmd.email" directamente (sin Exchange explícito)
+            rabbitTemplate.convertAndSend("q.cmd.email", mensajeEmail);
         }
         // ----------------------------------------------------
 
