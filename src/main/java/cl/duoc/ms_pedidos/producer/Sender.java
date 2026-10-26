@@ -1,5 +1,6 @@
 package cl.duoc.ms_pedidos.producer;
 
+import cl.duoc.ms_pedidos.config.RabbitMQConfig;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -18,8 +19,8 @@ public class Sender {
             // Para mantener la simplicidad de la guía, enviamos un String plano[cite: 9]
             String payload = String.format("[%s] TO: %s | MSG: %s", timestamp, destinatario, mensaje);
             
-            // Envía a la routingKey que coincide con el nombre de la cola[cite: 10]
-            rabbitTemplate.convertAndSend("q.cmd.email", payload);
+            // Mensaje de prueba: se publica al exchange como un cambio de estado genérico
+            rabbitTemplate.convertAndSend(RabbitMQConfig.EX_PEDIDOS, RabbitMQConfig.RK_ESTADO + "prueba", payload);
             System.out.println(" [OK] Mensaje enviado: '" + payload + "'");
             
         } catch (Exception e) {

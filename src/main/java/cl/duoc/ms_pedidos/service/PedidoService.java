@@ -1,5 +1,6 @@
 package cl.duoc.ms_pedidos.service;
 
+import cl.duoc.ms_pedidos.config.RabbitMQConfig;
 import cl.duoc.ms_pedidos.dto.ItemCarritoRequest;
 import cl.duoc.ms_pedidos.dto.PedidoRequest;
 import cl.duoc.ms_pedidos.dto.PedidoResponse;
@@ -76,14 +77,20 @@ public class PedidoService {
         // --- Integración con RabbitMQ para Notificaciones ---
         // Emitimos el comando solo si el estado es diferente al inicial
         if (nuevoEstado != EstadoPedido.CREADO) {
-            Map<String, Object> mensajeEmail = new HashMap<>();
+            Map<String, Object> mensaje = new HashMap<>();
+            mensaje.put("pedidoId", actualizado.getId());
+            mensaje.put("estado", nuevoEstado.name());
+            mensaje.put("total", actualizado.getTotal());
             // Simulamos el correo usando el OID del usuario
-            mensajeEmail.put("to", "cliente_" + actualizado.getUsuarioOid() + "@wepay.cl");
-            mensajeEmail.put("subject", "Actualización de Pedido #" + actualizado.getId());
-            mensajeEmail.put("body", "Tu pedido ha cambiado al estado: " + nuevoEstado.name());
+            mensaje.put("to", "cliente_" + actualizado.getUsuarioOid() + "@wepay.cl");
+            mensaje.put("subject", "Actualización de Pedido #" + actualizado.getId());
+            mensaje.put("body", "Tu pedido ha cambiado al estado: " + nuevoEstado.name());
 
-            // Enviamos a la cola "q.cmd.email" directamente (sin Exchange explícito)
-            rabbitTemplate.convertAndSend("q.cmd.email", mensajeEmail);
+            // Publicamos al exchange con routing key "pedido.estado.<estado>".
+            // El productor no conoce las colas: los bindings deciden si va a email, sms y/o facturación.
+            String routingKey = RabbitMQConfig.RK_ESTADO + nuevoEstado.name().toLowerCase();
+            rabbitTemplate.convertAndSend(RabbitMQConfig.EX_PEDIDOS, routingKey, mensaje);
+            System.out.println(" [OK] Evento publicado en " + RabbitMQConfig.EX_PEDIDOS + " con routing key " + routingKey);
         }
         // ----------------------------------------------------
 
