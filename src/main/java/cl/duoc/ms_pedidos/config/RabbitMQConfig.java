@@ -18,7 +18,8 @@ import org.springframework.context.annotation.Configuration;
  * Cada cola se suscribe solo a los estados que le interesan:
  *   - q.cmd.email        ← pedido.estado.*          (todos los cambios)
  *   - q.cmd.sms          ← pedido.estado.despachado / pedido.estado.cancelado  (TTL 60 s)
- *   - q.cmd.facturacion  ← pedido.estado.entregado  (máx. 100 mensajes)
+ *   - q.cmd.facturacion  ← pedido.estado.aceptado / pedido.estado.cancelado  (máx. 100 mensajes)
+ *                          aceptado = pago aprobado -> boleta; cancelado -> nota de crédito
  * Lo que falla, expira o desborda va a "ex.pedidos.dlx" y de ahí a su DLQ.
  *
  * IMPORTANTE: esta misma clase existe en ms-notificaciones. Declarar dos veces es
@@ -114,9 +115,16 @@ public class RabbitMQConfig {
         return BindingBuilder.bind(smsQueue()).to(pedidosExchange()).with(RK_ESTADO + "cancelado");
     }
 
+    /** La boleta se emite cuando se aprueba el pago, es decir, cuando el pedido pasa a ACEPTADO. */
     @Bean
     public Binding facturacionBinding() {
-        return BindingBuilder.bind(facturacionQueue()).to(pedidosExchange()).with(RK_ESTADO + "entregado");
+        return BindingBuilder.bind(facturacionQueue()).to(pedidosExchange()).with(RK_ESTADO + "aceptado");
+    }
+
+    /** Si se cancela un pedido ya facturado, facturación emite una nota de crédito. */
+    @Bean
+    public Binding facturacionCanceladoBinding() {
+        return BindingBuilder.bind(facturacionQueue()).to(pedidosExchange()).with(RK_ESTADO + "cancelado");
     }
 
     // ---------------- Bindings DLQ ----------------

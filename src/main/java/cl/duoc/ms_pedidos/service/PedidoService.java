@@ -71,6 +71,10 @@ public class PedidoService {
             }
         }
         
+        // Se guarda el estado anterior: facturación lo necesita para saber si un
+        // pedido cancelado ya tenía boleta (y entonces corresponde nota de crédito).
+        EstadoPedido estadoAnterior = pedido.getEstado();
+
         pedido.setEstado(nuevoEstado);
         Pedido actualizado = pedidoRepository.save(pedido);
         
@@ -80,6 +84,7 @@ public class PedidoService {
             Map<String, Object> mensaje = new HashMap<>();
             mensaje.put("pedidoId", actualizado.getId());
             mensaje.put("estado", nuevoEstado.name());
+            mensaje.put("estadoAnterior", estadoAnterior.name());
             mensaje.put("total", actualizado.getTotal());
             // Simulamos el correo usando el OID del usuario
             mensaje.put("to", "cliente_" + actualizado.getUsuarioOid() + "@wepay.cl");
