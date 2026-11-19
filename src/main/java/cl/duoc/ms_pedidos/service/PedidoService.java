@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import cl.duoc.ms_pedidos.config.RabbitMQConfig;
 import cl.duoc.ms_pedidos.dto.ItemCarritoRequest;
 import cl.duoc.ms_pedidos.dto.PedidoRequest;
 import cl.duoc.ms_pedidos.dto.PedidoResponse;
@@ -61,7 +62,8 @@ public class PedidoService {
 
         publicarDespuesDeGuardar(
                 guardado,
-                "OrderCreated");
+                "OrderCreated",
+                null);
 
         return convertirADto(guardado);
 
@@ -72,30 +74,20 @@ public class PedidoService {
         Pedido pedido = pedidoRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Pedido no encontrado"));
 
-        // Regla de negocio: No se puede despachar sin aceptar
+        // Regla de negocio: solo se permiten las transiciones de validarTransicion()
         validarTransicion(
                 pedido.getEstado(),
                 nuevoEstado);
 
+        // Se guarda el estado anterior: facturación lo necesita para saber si un
+        // pedido cancelado ya tenía boleta (y entonces corresponde nota de crédito).
+        EstadoPedido estadoAnterior = pedido.getEstado();
+
         pedido.setEstado(nuevoEstado);
         Pedido actualizado = pedidoRepository.save(pedido);
 
-        // --- Integración con RabbitMQ para Notificaciones ---
-        // Emitimos el comando solo si el estado es diferente al inicial
-        if (nuevoEstado != EstadoPedido.CREADO) {
-            Map<String, Object> mensajeEmail = new HashMap<>();
-            // Simulamos el correo usando el OID del usuario
-            mensajeEmail.put("to", "cliente_" + actualizado.getUsuarioOid() + "@wepay.cl");
-            mensajeEmail.put("subject", "Actualización de Pedido #" + actualizado.getId());
-            mensajeEmail.put("body", "Tu pedido ha cambiado al estado: " + nuevoEstado.name());
-
-            // Enviamos a la cola "q.cmd.email" directamente (sin Exchange explícito)
-            rabbitTemplate.convertAndSend("q.cmd.email", mensajeEmail);
-        }
-        // ----------------------------------------------------
-
         // TODO: (Próximamente) Si el estado es ACEPTADO, llamar a ms-catalogo para
-        // desco./mvnw clean compilentar stock
+        // descontar stock
 
         String tipoEvento = switch (nuevoEstado) {
             case CREADO -> "OrderCreated";
@@ -108,7 +100,8 @@ public class PedidoService {
 
         publicarDespuesDeGuardar(
                 actualizado,
-                tipoEvento);
+                tipoEvento,
+                estadoAnterior);
 
         return convertirADto(actualizado);
 
@@ -137,18 +130,64 @@ public class PedidoService {
 
     private void publicarDespuesDeGuardar(
             Pedido pedido,
-            String tipoEvento) {
+            String tipoEvento,
+            EstadoPedido estadoAnterior) {
 
         TransactionSynchronizationManager.registerSynchronization(
                 new TransactionSynchronization() {
 
                     @Override
                     public void afterCommit() {
-                        pedidoEventoProducer.publicarEvento(
-                                pedido,
-                                tipoEvento);
+                        // El pedido ya está guardado: una falla al publicar se registra,
+                        // pero no se propaga al cliente ni impide la otra publicación.
+
+                        // Kafka: evento de dominio completo (auditoría, reportes)
+                        try {
+                            pedidoEventoProducer.publicarEvento(pedido, tipoEvento);
+                        } catch (Exception e) {
+                            System.err.println("[ERROR] No se pudo publicar " + tipoEvento
+                                    + " en Kafka para el pedido #" + pedido.getId() + ": " + e.getMessage());
+                        }
+
+                        // RabbitMQ: comando de notificación (email, sms, facturación)
+                        try {
+                            publicarNotificacion(pedido, estadoAnterior);
+                        } catch (Exception e) {
+                            System.err.println("[ERROR] No se pudo publicar en RabbitMQ el pedido #"
+                                    + pedido.getId() + ": " + e.getMessage());
+                        }
                     }
                 });
+    }
+
+    /**
+     * Publica el cambio de estado en el exchange ex.pedidos con routing key
+     * "pedido.estado.<estado>". El productor no conoce las colas: los bindings
+     * deciden si el mensaje va a email, sms y/o facturación.
+     * El estado CREADO no se publica en RabbitMQ (solo en Kafka).
+     */
+    private void publicarNotificacion(Pedido pedido, EstadoPedido estadoAnterior) {
+        EstadoPedido estado = pedido.getEstado();
+        if (estado == EstadoPedido.CREADO) {
+            return;
+        }
+
+        Map<String, Object> mensaje = new HashMap<>();
+        mensaje.put("pedidoId", pedido.getId());
+        mensaje.put("estado", estado.name());
+        if (estadoAnterior != null) {
+            mensaje.put("estadoAnterior", estadoAnterior.name());
+        }
+        mensaje.put("total", pedido.getTotal());
+        // Simulamos el correo usando el OID del usuario
+        mensaje.put("to", "cliente_" + pedido.getUsuarioOid() + "@wepay.cl");
+        mensaje.put("subject", "Actualización de Pedido #" + pedido.getId());
+        mensaje.put("body", "Tu pedido ha cambiado al estado: " + estado.name());
+
+        String routingKey = RabbitMQConfig.RK_ESTADO + estado.name().toLowerCase();
+        rabbitTemplate.convertAndSend(RabbitMQConfig.EX_PEDIDOS, routingKey, mensaje);
+        System.out.println(" [OK] Evento publicado en " + RabbitMQConfig.EX_PEDIDOS
+                + " con routing key " + routingKey);
     }
 
     private void validarTransicion(
