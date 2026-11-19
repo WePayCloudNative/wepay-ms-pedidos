@@ -62,7 +62,8 @@ public class PedidoService {
 
         publicarDespuesDeGuardar(
                 guardado,
-                "OrderCreated");
+                "OrderCreated",
+                null);
 
         return convertirADto(guardado);
 
@@ -77,6 +78,10 @@ public class PedidoService {
         validarTransicion(
                 pedido.getEstado(),
                 nuevoEstado);
+
+        // Se guarda el estado anterior: facturación lo necesita para saber si un
+        // pedido cancelado ya tenía boleta (y entonces corresponde nota de crédito).
+        EstadoPedido estadoAnterior = pedido.getEstado();
 
         pedido.setEstado(nuevoEstado);
         Pedido actualizado = pedidoRepository.save(pedido);
@@ -95,7 +100,8 @@ public class PedidoService {
 
         publicarDespuesDeGuardar(
                 actualizado,
-                tipoEvento);
+                tipoEvento,
+                estadoAnterior);
 
         return convertirADto(actualizado);
 
@@ -124,7 +130,8 @@ public class PedidoService {
 
     private void publicarDespuesDeGuardar(
             Pedido pedido,
-            String tipoEvento) {
+            String tipoEvento,
+            EstadoPedido estadoAnterior) {
 
         TransactionSynchronizationManager.registerSynchronization(
                 new TransactionSynchronization() {
@@ -144,7 +151,7 @@ public class PedidoService {
 
                         // RabbitMQ: comando de notificación (email, sms, facturación)
                         try {
-                            publicarNotificacion(pedido);
+                            publicarNotificacion(pedido, estadoAnterior);
                         } catch (Exception e) {
                             System.err.println("[ERROR] No se pudo publicar en RabbitMQ el pedido #"
                                     + pedido.getId() + ": " + e.getMessage());
@@ -159,7 +166,7 @@ public class PedidoService {
      * deciden si el mensaje va a email, sms y/o facturación.
      * El estado CREADO no se publica en RabbitMQ (solo en Kafka).
      */
-    private void publicarNotificacion(Pedido pedido) {
+    private void publicarNotificacion(Pedido pedido, EstadoPedido estadoAnterior) {
         EstadoPedido estado = pedido.getEstado();
         if (estado == EstadoPedido.CREADO) {
             return;
@@ -168,6 +175,9 @@ public class PedidoService {
         Map<String, Object> mensaje = new HashMap<>();
         mensaje.put("pedidoId", pedido.getId());
         mensaje.put("estado", estado.name());
+        if (estadoAnterior != null) {
+            mensaje.put("estadoAnterior", estadoAnterior.name());
+        }
         mensaje.put("total", pedido.getTotal());
         // Simulamos el correo usando el OID del usuario
         mensaje.put("to", "cliente_" + pedido.getUsuarioOid() + "@wepay.cl");
