@@ -73,11 +73,9 @@ public class PedidoService {
                 .orElseThrow(() -> new RuntimeException("Pedido no encontrado"));
 
         // Regla de negocio: No se puede despachar sin aceptar
-        if (nuevoEstado == EstadoPedido.DESPACHADO) {
-            if (pedido.getEstado() == EstadoPedido.CREADO) {
-                throw new IllegalStateException("No se puede despachar un pedido que no ha sido aceptado o preparado");
-            }
-        }
+        validarTransicion(
+                pedido.getEstado(),
+                nuevoEstado);
 
         pedido.setEstado(nuevoEstado);
         Pedido actualizado = pedidoRepository.save(pedido);
@@ -151,6 +149,43 @@ public class PedidoService {
                                 tipoEvento);
                     }
                 });
+    }
+
+    private void validarTransicion(
+            EstadoPedido estadoActual,
+            EstadoPedido nuevoEstado) {
+
+        if (estadoActual == nuevoEstado) {
+            throw new IllegalStateException(
+                    "El pedido ya se encuentra en estado: "
+                            + estadoActual);
+        }
+
+        boolean permitido = switch (estadoActual) {
+
+            case CREADO ->
+                nuevoEstado == EstadoPedido.ACEPTADO
+                        || nuevoEstado == EstadoPedido.CANCELADO;
+
+            case ACEPTADO ->
+                nuevoEstado == EstadoPedido.EN_PREPARACION
+                        || nuevoEstado == EstadoPedido.CANCELADO;
+
+            case EN_PREPARACION ->
+                nuevoEstado == EstadoPedido.DESPACHADO
+                        || nuevoEstado == EstadoPedido.CANCELADO;
+
+            case DESPACHADO ->
+                nuevoEstado == EstadoPedido.ENTREGADO;
+
+            case ENTREGADO, CANCELADO -> false;
+        };
+
+        if (!permitido) {
+            throw new IllegalStateException(
+                    "Transición no permitida: "
+                            + estadoActual + " -> " + nuevoEstado);
+        }
     }
 
 }

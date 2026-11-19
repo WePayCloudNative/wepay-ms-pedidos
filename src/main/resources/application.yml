@@ -15,11 +15,12 @@ spring:
   h2:
     console:
       enabled: true
+
   rabbitmq:
     host: ${RABBIT_HOST:localhost}
     port: 5672
-    username: guest
-    password: guest
+    username: ${RABBIT_USER:guest}
+    password: ${RABBIT_PASS:guest}
     virtual-host: /
     template:
       retry:
@@ -27,6 +28,7 @@ spring:
         initial-interval: 1000
         max-interval: 30000
         multiplier: 2.0
+
   
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
