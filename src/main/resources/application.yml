@@ -3,15 +3,16 @@ server:
 spring:
   application:
     name: ms-pedidos
+  # En AWS: Oracle en RDS (DB_URL, DB_USER, DB_PASSWORD desde el .env de la EC2).
+  # Sin esas variables (desarrollo local) usa H2 en memoria.
+  # Hibernate detecta el tipo de base solo, por eso no se fija el dialecto.
   datasource:
-    url: jdbc:h2:mem:pedidosdb
-    driverClassName: org.h2.Driver
-    username: sa
-    password: 
+    url: ${DB_URL:jdbc:h2:mem:pedidosdb}
+    username: ${DB_USER:sa}
+    password: ${DB_PASSWORD:}
   jpa:
     hibernate:
-      ddl-auto: update
-    database-platform: org.hibernate.dialect.H2Dialect
+      ddl-auto: ${JPA_DDL_AUTO:update}
   h2:
     console:
       enabled: true
