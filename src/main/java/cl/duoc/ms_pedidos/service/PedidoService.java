@@ -1,6 +1,7 @@
 package cl.duoc.ms_pedidos.service;
 
 import cl.duoc.ms_pedidos.config.RabbitMQConfig;
+import cl.duoc.ms_pedidos.dto.DetalleResponse;
 import cl.duoc.ms_pedidos.dto.ItemCarritoRequest;
 import cl.duoc.ms_pedidos.dto.PedidoRequest;
 import cl.duoc.ms_pedidos.dto.PedidoResponse;
@@ -105,12 +106,14 @@ public class PedidoService {
         return convertirADto(actualizado);
     }
 
+    @Transactional(readOnly = true)
     public List<PedidoResponse> obtenerTodos() {
         return pedidoRepository.findAll().stream()
                 .map(this::convertirADto)
                 .toList();
     }
 
+    @Transactional(readOnly = true)
     public List<PedidoResponse> obtenerPorUsuario(String oid) {
         return pedidoRepository.findByUsuarioOid(oid).stream()
                 .map(this::convertirADto)
@@ -123,7 +126,13 @@ public class PedidoService {
                 p.getUsuarioOid(),
                 p.getTotal(),
                 p.getFechaRegistro(),
-                p.getEstado().name() 
-        );
+                p.getEstado().name(),
+                p.getDetalles().stream()
+                        .map(d -> new DetalleResponse(
+                                d.getProductoId(),
+                                d.getNombreProducto(),
+                                d.getPrecioUnitario(),
+                                d.getCantidad()))
+                        .toList());
     }
 }
