@@ -9,5 +9,8 @@ public record PedidoResponse(
     Double total,
     LocalDateTime fechaRegistro,
     String estado,
-    List<DetalleResponse> detalles
+    List<DetalleResponse> detalles,
+    // null hasta que auditoría confirme el primer evento del pedido
+    LocalDateTime auditadoEn,
+    String estadoAuditado
 ) {}
