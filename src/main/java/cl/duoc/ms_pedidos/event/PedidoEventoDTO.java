@@ -13,6 +13,11 @@ public record PedidoEventoDTO(
         String estado,
         LocalDateTime fechaCreacion,
         LocalDateTime fechaEvento,
-        List<DetalleEventoDTO> detalles
+        List<DetalleEventoDTO> detalles,
+        // Quién hizo el cambio (puede ser distinto del dueño del pedido)
+        String actorOid,
+        String actorRol,
+        // Estado antes del cambio; null al crear el pedido
+        String estadoAnterior
 ) {
 }

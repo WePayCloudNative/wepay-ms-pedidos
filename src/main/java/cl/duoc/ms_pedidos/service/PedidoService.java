@@ -19,6 +19,7 @@ import cl.duoc.ms_pedidos.dto.PedidoResponse;
 import cl.duoc.ms_pedidos.entity.DetallePedido;
 import cl.duoc.ms_pedidos.entity.EstadoPedido;
 import cl.duoc.ms_pedidos.entity.Pedido;
+import cl.duoc.ms_pedidos.event.Actor;
 import cl.duoc.ms_pedidos.producer.PedidoEventoProducer;
 import cl.duoc.ms_pedidos.repository.PedidoRepository;
 
@@ -61,17 +62,19 @@ public class PedidoService {
 
         Pedido guardado = pedidoRepository.save(pedido);
 
+        // Quien crea el pedido es siempre su dueño
         publicarDespuesDeGuardar(
                 guardado,
                 "OrderCreated",
-                null);
+                null,
+                Actor.cliente(oid));
 
         return convertirADto(guardado);
 
     }
 
     @Transactional
-    public PedidoResponse actualizarEstado(Long id, EstadoPedido nuevoEstado) {
+    public PedidoResponse actualizarEstado(Long id, EstadoPedido nuevoEstado, Actor actor) {
         Pedido pedido = pedidoRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Pedido no encontrado"));
 
@@ -102,7 +105,8 @@ public class PedidoService {
         publicarDespuesDeGuardar(
                 actualizado,
                 tipoEvento,
-                estadoAnterior);
+                estadoAnterior,
+                actor);
 
         return convertirADto(actualizado);
 
@@ -141,7 +145,8 @@ public class PedidoService {
     private void publicarDespuesDeGuardar(
             Pedido pedido,
             String tipoEvento,
-            EstadoPedido estadoAnterior) {
+            EstadoPedido estadoAnterior,
+            Actor actor) {
 
         TransactionSynchronizationManager.registerSynchronization(
                 new TransactionSynchronization() {
@@ -153,7 +158,7 @@ public class PedidoService {
 
                         // Kafka: evento de dominio completo (auditoría, reportes)
                         try {
-                            pedidoEventoProducer.publicarEvento(pedido, tipoEvento);
+                            pedidoEventoProducer.publicarEvento(pedido, tipoEvento, actor, estadoAnterior);
                         } catch (Exception e) {
                             System.err.println("[ERROR] No se pudo publicar " + tipoEvento
                                     + " en Kafka para el pedido #" + pedido.getId() + ": " + e.getMessage());
@@ -200,7 +205,8 @@ public class PedidoService {
                 + " con routing key " + routingKey);
     }
 
-    private void validarTransicion(
+    /** Reglas del flujo del pedido. Paquete-privado y estático para probarlo con tests unitarios. */
+    static void validarTransicion(
             EstadoPedido estadoActual,
             EstadoPedido nuevoEstado) {
 
