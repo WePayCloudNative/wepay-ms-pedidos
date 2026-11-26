@@ -1,7 +1,9 @@
 
 package cl.duoc.ms_pedidos.producer;
 
+import cl.duoc.ms_pedidos.entity.EstadoPedido;
 import cl.duoc.ms_pedidos.entity.Pedido;
+import cl.duoc.ms_pedidos.event.Actor;
 import cl.duoc.ms_pedidos.event.DetalleEventoDTO;
 import cl.duoc.ms_pedidos.event.PedidoEventoDTO;
 
@@ -32,7 +34,9 @@ public class PedidoEventoProducer {
 
     public void publicarEvento(
             Pedido pedido,
-            String tipoEvento) {
+            String tipoEvento,
+            Actor actor,
+            EstadoPedido estadoAnterior) {
 
         List<DetalleEventoDTO> detalles =
                 pedido.getDetalles().stream()
@@ -53,7 +57,10 @@ public class PedidoEventoProducer {
                 pedido.getEstado().name(),
                 pedido.getFechaRegistro(),
                 LocalDateTime.now(),
-                detalles
+                detalles,
+                actor.oid(),
+                actor.rol(),
+                estadoAnterior == null ? null : estadoAnterior.name()
         );
 
         String mensaje = objectMapper.writeValueAsString(evento);

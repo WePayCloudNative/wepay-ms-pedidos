@@ -8,6 +8,8 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
+import cl.duoc.ms_pedidos.event.Actor;
+
 @RestController
 @RequestMapping("/api/pedidos")
 public class PedidoController {
@@ -42,6 +44,9 @@ public class PedidoController {
         // Convertimos el String a nuestro Enum EstadoPedido
         EstadoPedido nuevoEstado = EstadoPedido.valueOf(status.toUpperCase());
         
-        return pedidoService.actualizarEstado(id, nuevoEstado);
+        // Quién hace el cambio lo informa el BFF (sale del JWT, no del navegador)
+        Actor actor = Actor.de(body.get("actorOid"), body.get("actorRol"));
+
+        return pedidoService.actualizarEstado(id, nuevoEstado, actor);
     }
 }
