@@ -139,7 +139,9 @@ public class PedidoService {
                                 d.getNombreProducto(),
                                 d.getPrecioUnitario(),
                                 d.getCantidad()))
-                        .toList());
+                        .toList(),
+                p.getAuditadoEn(),
+                p.getEstadoAuditado());
     }
 
     private void publicarDespuesDeGuardar(

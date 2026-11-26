@@ -30,6 +30,11 @@ public class Pedido {
     @Enumerated(EnumType.STRING)
     private EstadoPedido estado;
 
+    // Confirmación de auditoría (llega por audit.timeline): cuándo se registró el último
+    // evento del pedido y en qué estado lo dejó. Si coincide con "estado", auditoría está al día.
+    private LocalDateTime auditadoEn;
+    private String estadoAuditado;
+
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "pedido_id")
     private List<DetallePedido> detalles = new ArrayList<>();
@@ -50,6 +55,12 @@ public class Pedido {
     
     public EstadoPedido getEstado() { return estado; }
     public void setEstado(EstadoPedido estado) { this.estado = estado; }
+
+    public LocalDateTime getAuditadoEn() { return auditadoEn; }
+    public void setAuditadoEn(LocalDateTime auditadoEn) { this.auditadoEn = auditadoEn; }
+
+    public String getEstadoAuditado() { return estadoAuditado; }
+    public void setEstadoAuditado(String estadoAuditado) { this.estadoAuditado = estadoAuditado; }
 
     public List<DetallePedido> getDetalles() { return detalles; }
     public void setDetalles(List<DetallePedido> detalles) { this.detalles = detalles; }

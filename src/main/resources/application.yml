@@ -36,3 +36,42 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      # --- Confiabilidad del envío ---
+      # all: el broker confirma solo cuando el mensaje está en las réplicas sincronizadas
+      # (min.insync.replicas=2 en el clúster de 3 brokers)
+      acks: all
+      retries: 5
+      compression-type: lz4
+      properties:
+        # Idempotente: si un envío se reintenta, Kafka no guarda el mensaje dos veces
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+        retry.backoff.ms: 500
+        request.timeout.ms: 10000
+        delivery.timeout.ms: 30000
+        # Junta mensajes hasta 5 ms antes de enviar (menos viajes a la red)
+        linger.ms: 5
+    # ms-pedidos también consume: las confirmaciones de audit.timeline
+    consumer:
+      group-id: wepay-pedidos-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      enable-auto-commit: false
+      max-poll-records: 50
+      properties:
+        session.timeout.ms: 15000
+        heartbeat.interval.ms: 5000
+        max.poll.interval.ms: 300000
+        partition.assignment.strategy: org.apache.kafka.clients.consumer.CooperativeStickyAssignor
+    listener:
+      ack-mode: record
+      # 3 hilos = 1 por partición de audit.timeline
+      concurrency: 3
+
+# Tópicos que escucha ms-pedidos
+app:
+  kafka:
+    topic:
+      # Confirmaciones de ms-auditoria: cada evento ya registrado
+      timeline: audit.timeline
